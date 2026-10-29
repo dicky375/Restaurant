@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Calendar, Clock, Users, MapPin, Check, Utensils } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
@@ -17,16 +17,52 @@ export default function BookingPage() {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [bookingCode, setBookingCode] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [availableTimes, setAvailableTimes] = useState<string[]>([]);
+  const [isLoadingTimes, setIsLoadingTimes] = useState(false);
 
-  // Use the environment variable for the API URL
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
-  const timeSlots = [
+  const allTimeSlots = [
     '11:00 AM', '11:30 AM', '12:00 PM', '12:30 PM', '1:00 PM', '1:30 PM',
     '2:00 PM', '2:30 PM', '3:00 PM', '3:30 PM', '4:00 PM', '4:30 PM',
     '5:00 PM', '5:30 PM', '6:00 PM', '6:30 PM', '7:00 PM', '7:30 PM',
     '8:00 PM', '8:30 PM', '9:00 PM', '9:30 PM', '10:00 PM'
   ];
+
+  // Fetch real availability when date, guests, or preference changes
+  useEffect(() => {
+    const fetchAvailability = async () => {
+      if (!date || !guests) {
+        setAvailableTimes([]);
+        return;
+      }
+
+      setIsLoadingTimes(true);
+      try {
+        const response = await fetch(
+          `${API_URL}/api/availability?date=${date}&partySize=${guests}&preference=${diningPreference || 'indoor'}`
+        );
+        const data = await response.json();
+        
+        // Convert ISO strings back to 'HH:MM AM/PM' format for the dropdown
+        const times = data.map((slot: any) => {
+          const d = new Date(slot.time);
+          return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+        });
+        
+        setAvailableTimes(times);
+        if (time && !times.includes(time)) setTime('');
+      } catch (err) {
+        console.error('Failed to load availability', err);
+        // Fallback: show all times if the API fails
+        setAvailableTimes(allTimeSlots);
+      } finally {
+        setIsLoadingTimes(false);
+      }
+    };
+
+    fetchAvailability();
+  }, [date, guests, diningPreference, API_URL]);
 
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -41,7 +77,6 @@ export default function BookingPage() {
     try {
       const resourceType = diningPreference === 'outdoor' ? 'GARDEN' : 'TABLE';
       
-      // --- NEW DATE PARSING LOGIC ---
       const [hoursStr, minutesStr] = time.split(':');
       const [mins, modifier] = minutesStr.split(' ');
       let hours = parseInt(hoursStr, 10);
@@ -51,9 +86,7 @@ export default function BookingPage() {
 
       const finalDate = new Date(date);
       finalDate.setHours(hours, parseInt(mins, 10), 0, 0);
-      // -------------------------------
 
-      // Use ${API_URL} here!
       const response = await fetch(`${API_URL}/api/bookings`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -69,7 +102,6 @@ export default function BookingPage() {
       });
 
       const data = await response.json();
-
       if (!response.ok) throw new Error(data.error || 'Failed to create booking');
 
       setBookingCode(data.manageCode);
@@ -135,9 +167,17 @@ export default function BookingPage() {
                   value={time} 
                   onChange={(e) => setTime(e.target.value)} 
                   className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white"
+                  disabled={!date || !guests || isLoadingTimes}
                 >
-                  <option value="">Choose time</option>
-                  {timeSlots.map(slot => <option key={slot} value={slot}>{slot}</option>)}
+                  <option value="">
+                    {isLoadingTimes ? 'Checking availability...' :
+                     !date || !guests ? 'Pick date & guests first' :
+                     availableTimes.length === 0 ? 'No tables available' :
+                     'Choose time'}
+                  </option>
+                  {availableTimes.map(slot => (
+                    <option key={slot} value={slot}>{slot}</option>
+                  ))}
                 </select>
               </div>
               <div>
@@ -193,8 +233,8 @@ export default function BookingPage() {
             <button 
               type="button" 
               onClick={handleSubmit} 
-              disabled={isSubmitting} 
-              className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 rounded-md transition-colors"
+              disabled={isSubmitting || !time} 
+              className="w-full bg-amber-600 hover:bg-amber-700 disabled:bg-gray-400 text-white font-bold py-3 rounded-md transition-colors"
             >
               {isSubmitting ? 'Confirming...' : 'Confirm Reservation'}
             </button>

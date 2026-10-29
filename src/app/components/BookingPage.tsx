@@ -18,12 +18,16 @@ export default function BookingPage() {
   const [bookingCode, setBookingCode] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Use the environment variable for the API URL
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+
   const timeSlots = [
     '11:00 AM', '11:30 AM', '12:00 PM', '12:30 PM', '1:00 PM', '1:30 PM',
     '2:00 PM', '2:30 PM', '3:00 PM', '3:30 PM', '4:00 PM', '4:30 PM',
     '5:00 PM', '5:30 PM', '6:00 PM', '6:30 PM', '7:00 PM', '7:30 PM',
     '8:00 PM', '8:30 PM', '9:00 PM', '9:30 PM', '10:00 PM'
   ];
+
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     
@@ -49,12 +53,13 @@ export default function BookingPage() {
       finalDate.setHours(hours, parseInt(mins, 10), 0, 0);
       // -------------------------------
 
-      const response = await fetch('http://localhost:3000/api/bookings', {
+      // Use ${API_URL} here!
+      const response = await fetch(`${API_URL}/api/bookings`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           resourceType,
-          startAt: finalDate.toISOString(), // Use the correctly parsed date
+          startAt: finalDate.toISOString(),
           guestCount: parseInt(guests),
           hostName: name,
           hostEmail: email,
